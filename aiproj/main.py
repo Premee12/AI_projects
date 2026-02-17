@@ -1,0 +1,75 @@
+from dotenv import load_dotenv      # Loads env variables from a .env file into your system environment
+from langchain_groq import ChatGroq # LangChain wrapper for Groq’s LLM API for chat interactions
+import asyncio                      # Python’s built-in library for asynchronous programming (async/await)
+from mcp_use import MCPAgent, MCPClient
+import os                           # Standard library for interacting with env variables, file paths, system settings
+# MCPClient - connects to an MCP server to access tools
+# MCPAgent  - higher-level agent that can use MCP tools automatically during reasoning
+
+
+async def run_memory_chat():
+    """Run a chat using MCPAgent's built-in conversation memory."""
+    # Load environment variables for API keys
+    load_dotenv()
+    os.environ["GROQ_API_KEY"] = os.getenv("GROQ_API_KEY")
+
+    # Config file path - change this to your config file
+    config_file = "mcp_browser.json"
+
+    print("Initializing chat...")
+
+    # Create MCP client and agent with memory enabled
+    client = MCPClient.from_config_file(config_file)
+    llm = ChatGroq(model="openai/gpt-oss-safeguard-20b", temperature=0.7)
+
+
+    # Create agent with memory_enabled=True
+    agent = MCPAgent(
+        llm=llm,
+        client=client,
+        max_steps=15,
+        memory_enabled=True,  # Enable built-in conversation memory
+    )
+
+    print("\n===== Interactive MCP Chat =====")
+    print("Type 'exit' or 'quit' to end the conversation")
+    print("Type 'clear' to clear conversation history")
+    print("=================================\n")
+
+    try:
+        # Main chat loop
+        while True:
+            # Get user input
+            user_input = input("\nYou: ")
+
+            # Check for exit command
+            if user_input.lower() in ["exit", "quit"]:
+                print("Ending conversation...")
+                break
+
+            # Check for clear history command
+            if user_input.lower() == "clear":
+                agent.clear_conversation_history()
+                print("Conversation history cleared.")
+                continue
+
+            # Get response from agent
+            print("\nAssistant: ", end="", flush=True)
+
+            try:
+                # Run the agent with the user input (memory handling is automatic)
+                response = await agent.run(user_input)
+                print(response)
+
+            except Exception as e:
+                print(f"\nError: {e}")
+
+    finally:
+        # Clean up
+        if client and client.sessions:
+            await client.close_all_sessions()
+
+
+
+if __name__ == "__main__":
+    asyncio.run(run_memory_chat())
